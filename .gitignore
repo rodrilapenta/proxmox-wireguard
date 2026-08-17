@@ -1,0 +1,11 @@
+# Runtime/generated configuration
+config/resolved.conf
+
+# Local editor/OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Archives / build artifacts
+*.zip
