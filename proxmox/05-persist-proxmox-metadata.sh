@@ -12,6 +12,7 @@ HOST_STATE_FILE="${HOST_STATE_DIR}/deployment.conf"
   exit 1
 }
 source "${ROOT_DIR}/config/resolved.conf"
+source "${ROOT_DIR}/VERSION"
 
 [[ $EUID -eq 0 ]] || { echo "Run as root on Proxmox." >&2; exit 1; }
 
@@ -36,6 +37,9 @@ WG_CLIENT_DNS="${WG_CLIENT_DNS}"
 WG_PERSISTENT_KEEPALIVE="${WG_PERSISTENT_KEEPALIVE}"
 WG_MTU="${WG_MTU}"
 PVE_BACKUP_STORAGE="${PVE_BACKUP_STORAGE}"
+PROJECT_VERSION="${PROJECT_VERSION}"
+STATE_SCHEMA_VERSION="${STATE_SCHEMA_VERSION}"
+DASHBOARD_PORT="${DASHBOARD_PORT:-8443}"
 EOF
 chmod 0600 "$HOST_STATE_FILE"
 echo "[OK] Persistent host metadata written to ${HOST_STATE_FILE}."

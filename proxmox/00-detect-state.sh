@@ -31,6 +31,7 @@ HEALTHCHECK_OK=0
 SNAPSHOT_PRESENT=0
 METADATA_PRESENT=0
 HEALTH_REPORT_PRESENT=0
+INSTALLED_VERSION="unknown"
 
 ssh_opts=(
   -i "$SSH_PRIVATE_KEY"
@@ -75,6 +76,8 @@ else
       if ssh "${ssh_opts[@]}" "${GUEST_USER}@${VM_IP}" \
           'test -d /opt/proxmox-wireguard' &>/dev/null; then
         PACKAGE_PRESENT=1
+        INSTALLED_VERSION="$(ssh "${ssh_opts[@]}" "${GUEST_USER}@${VM_IP}" \
+          'if sudo test -f /etc/proxmox-wireguard/version; then sudo awk -F= '\''$1 == "PROJECT_VERSION" { print $2; exit }'\'' /etc/proxmox-wireguard/version; else echo 1.0.0; fi' 2>/dev/null || echo unknown)"
       fi
 
       if ssh "${ssh_opts[@]}" "${GUEST_USER}@${VM_IP}" \
@@ -174,4 +177,5 @@ HEALTHCHECK_OK=${HEALTHCHECK_OK}
 SNAPSHOT_PRESENT=${SNAPSHOT_PRESENT}
 METADATA_PRESENT=${METADATA_PRESENT}
 HEALTH_REPORT_PRESENT=${HEALTH_REPORT_PRESENT}
+INSTALLED_VERSION=${INSTALLED_VERSION}
 EOF

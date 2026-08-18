@@ -14,14 +14,22 @@ dest="/var/backups/proxmox-wireguard/wireguard-gateway-${ts}.tar.gz"
 
 # Deliberately excludes /var/lib/proxmox-wireguard/exports because they can
 # contain client private keys. Server key + PSKs are included, so protect backup.
-tar -czf "$dest" \
-  /etc/wireguard \
-  /etc/nftables.conf \
-  /etc/sysctl.d/99-proxmox-wireguard.conf \
-  /etc/ssh/sshd_config.d/90-proxmox-wireguard.conf \
-  /var/lib/proxmox-wireguard/peers \
-  /opt/proxmox-wireguard/config \
-  2>/dev/null
+backup_paths=(
+  /etc/wireguard
+  /etc/nftables.conf
+  /etc/sysctl.d/99-proxmox-wireguard.conf
+  /etc/ssh/sshd_config.d/90-proxmox-wireguard.conf
+  /etc/proxmox-wireguard
+  /var/lib/proxmox-wireguard/peers
+  /var/lib/proxmox-wireguard/migrations
+  /opt/proxmox-wireguard/config
+)
+existing_paths=()
+for path in "${backup_paths[@]}"; do
+  [[ -e "$path" ]] && existing_paths+=("$path")
+done
+
+tar -czf "$dest" "${existing_paths[@]}" 2>/dev/null
 
 chmod 600 "$dest"
 echo "$dest"

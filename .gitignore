@@ -9,3 +9,5 @@ Thumbs.db
 
 # Archives / build artifacts
 *.zip
+dashboard/bin/
+dashboard/dist/

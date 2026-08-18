@@ -18,7 +18,7 @@ apt-get install -y \
   locales wireguard-tools nftables qrencode \
   qemu-guest-agent unattended-upgrades apt-listchanges \
   curl ca-certificates jq iproute2 iputils-ping dnsutils \
-  rsync openssh-server
+  rsync openssh-server speedtest-cli
 
 cat >/etc/default/locale <<'EOF'
 LANG=C.UTF-8
