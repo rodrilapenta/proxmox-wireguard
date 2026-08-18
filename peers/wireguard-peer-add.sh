@@ -9,6 +9,8 @@ else
 fi
 [[ $EUID -eq 0 ]] || { echo "Run with sudo/root." >&2; exit 1; }
 
+noninteractive=0
+if [[ "${1:-}" == "--non-interactive" ]]; then noninteractive=1; shift; fi
 name="${1:-}"
 [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$ ]] || {
   echo "Usage: $0 <peer-name>  (letters/numbers/._-)" >&2
@@ -162,6 +164,10 @@ fi
 
 echo
 echo "SECURITY: client private key currently exists in the export files."
+if (( noninteractive == 1 )); then
+  echo "Import the desired profiles, then purge their private-key material."
+  exit 0
+fi
 echo
 read -r -p "Have you imported all desired profiles and want to purge the exports now? [y/N]: " purge_now
 case "${purge_now,,}" in

@@ -10,6 +10,7 @@ fi
 STATE_DIR="/var/lib/proxmox-wireguard"
 HEALTH_OK_FILE="${STATE_DIR}/healthcheck.ok"
 HEALTH_REPORT_FILE="${STATE_DIR}/healthcheck.last"
+HEALTH_STATUS_FILE="${STATE_DIR}/healthcheck.status"
 mkdir -p "$STATE_DIR"
 rm -f "$HEALTH_OK_FILE"
 
@@ -41,6 +42,15 @@ systemctl is-enabled --quiet "wg-quick@${WG_IF}" && ok "WireGuard enabled at boo
 systemctl is-enabled --quiet nftables && ok "nftables enabled at boot" || bad "nftables not enabled at boot"
 systemctl is-active --quiet qemu-guest-agent && ok "QEMU guest agent active" || warn "QEMU guest agent inactive"
 
+if [[ -f "${ROOT_DIR}/VERSION" ]]; then
+  source "${ROOT_DIR}/VERSION"
+  if [[ "$(printf '%s\n' "1.2.0" "$PROJECT_VERSION" | sort -V | head -1)" == "1.2.0" ]]; then
+    systemctl is-active --quiet proxmox-wireguard-dashboard && ok "Dashboard service active" || bad "Dashboard service inactive"
+    systemctl is-active --quiet proxmox-wireguard-dashboard-helper && ok "Dashboard helper service active" || bad "Dashboard helper service inactive"
+    ss -H -ltn 2>/dev/null | grep -Eq '(^|[[:space:]])[^[:space:]]*:'"${DASHBOARD_PORT:-8443}"'([[:space:]]|$)' && ok "Dashboard HTTPS port ${DASHBOARD_PORT:-8443} listening" || bad "Dashboard HTTPS port ${DASHBOARD_PORT:-8443} not listening"
+  fi
+fi
+
 echo
 wg_output="$(wg show "$WG_IF" 2>/dev/null || true)"
 printf '%s\n' "$wg_output"
@@ -51,13 +61,20 @@ printf '%s\n' "$wg_output"
 
 install -m 0600 "$report_tmp" "$HEALTH_REPORT_FILE"
 
+timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 if (( fail == 0 )); then
   {
-    printf 'timestamp=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'timestamp=%s\n' "$timestamp"
     printf 'wg_if=%s\n' "$WG_IF"
     printf 'wg_port=%s\n' "$WG_PORT"
   } >"$HEALTH_OK_FILE"
   chmod 0600 "$HEALTH_OK_FILE"
 fi
+
+{
+  if (( fail == 0 )); then printf 'status=passed\n'; else printf 'status=failed\n'; fi
+  printf 'timestamp=%s\n' "$timestamp"
+} >"$HEALTH_STATUS_FILE"
+chmod 0600 "$HEALTH_STATUS_FILE"
 
 exit "$fail"

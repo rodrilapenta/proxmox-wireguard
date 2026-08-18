@@ -1,0 +1,38 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: dashboard/go.mod
+          cache-dependency-path: dashboard/go.sum
+      - name: Test dashboard
+        working-directory: dashboard
+        run: go test ./...
+      - name: Test shell migrations and helper
+        run: |
+          bash tests/test-migrations.sh
+          bash tests/test-dashboard-helper.sh
+          find . -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Build Linux dashboard
+        working-directory: dashboard
+        run: bash build-release.sh
+      - name: Prepare assets
+        run: |
+          cp dashboard/dist/linux-amd64/proxmox-wireguard-dashboard proxmox-wireguard-dashboard-linux-amd64
+          sha256sum proxmox-wireguard-dashboard-linux-amd64 > proxmox-wireguard-dashboard-linux-amd64.sha256
+          tar --exclude=.git --exclude=dashboard/bin -czf "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" .
+          sha256sum "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" > "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz.sha256"
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" proxmox-wireguard-dashboard-linux-amd64 proxmox-wireguard-dashboard-linux-amd64.sha256 "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz.sha256" --clobber

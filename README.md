@@ -198,6 +198,21 @@ Then run the installer again:
 ./install-proxmox-wireguard.sh
 ```
 
+For an existing healthy deployment, the wizard compares the installed guest
+version with the checked-out package version and offers an in-place update when
+they differ. An update creates a Proxmox snapshot and a protected guest
+configuration backup before copying new application files. Incremental,
+idempotent migrations are recorded under:
+
+```text
+/var/lib/proxmox-wireguard/migrations/
+```
+
+The installed version is committed only after migrations and the guest
+healthcheck succeed. WireGuard keys, peers, deployment configuration, dashboard
+state, and certificates live outside the replaceable application directory and
+are preserved across updates.
+
 The installer detects the existing deployment state and offers recovery,
 healthcheck, or wipe/rebuild actions as appropriate.
 
@@ -486,6 +501,62 @@ sudo /opt/proxmox-wireguard/peers/wireguard-peer-revoke.sh <peer-name>
 
 ---
 
+## Web dashboard
+
+Version 1.2.0 adds a self-hosted administration dashboard inside the WireGuard
+VM. The installer configures it automatically at:
+
+```text
+https://<VM-LAN-IP>:8443/
+https://10.77.77.1:8443/
+```
+
+The certificate is generated locally for the VM LAN and WireGuard addresses,
+so a browser may require the administrator to trust it explicitly. The
+dashboard port is accepted by nftables only from the configured LAN and VPN
+networks. Do not forward TCP 8443 on the router; UDP 51820 remains the only
+publicly exposed port.
+
+During installation or the first update from 1.0.0/1.1.0, the host wizard asks
+for a dashboard administrator password. It is sent to the guest over SSH
+standard input and stored only as a bcrypt hash. Running the wizard again on a
+complete deployment provides an option to change it.
+
+The dashboard provides:
+
+- current health and sanitized WireGuard telemetry;
+- peer creation, configuration download, QR display, export purge and revoke;
+- manual health, speed, DNS/DDNS, path and MTU-oriented diagnostics;
+- installed/update version information and the safe update sequence;
+- deployment and dashboard-security configuration.
+
+Speed tests are manual because they consume bandwidth and can temporarily
+affect active VPN connections. Private keys and preshared keys are removed from
+all telemetry and diagnostic output. The web process is unprivileged; a
+root-owned helper accepts only an enumerated set of validated operations.
+
+### Building the dashboard for development
+
+Local preview:
+
+```bash
+cd dashboard
+go run ./cmd/dashboard --mode demo --listen 127.0.0.1:8080
+```
+
+Linux release binary:
+
+```bash
+cd dashboard
+./build-release.sh
+```
+
+Tagged GitHub releases build and publish a statically linked Linux binary and
+SHA-256 checksum. A normal `git pull` followed by the installer downloads and
+verifies that exact version when the binary is not already bundled.
+
+---
+
 ## Checking the server
 
 Inside the WireGuard VM:
@@ -717,6 +788,12 @@ Inside the VM:
 /etc/wireguard/wg0.conf
 /etc/proxmox-wireguard/deployment.conf
 /var/lib/proxmox-wireguard/
+```
+
+Installed release metadata is stored in:
+
+```text
+/etc/proxmox-wireguard/version
 ```
 
 ---

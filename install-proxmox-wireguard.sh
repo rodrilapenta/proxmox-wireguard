@@ -2,18 +2,21 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/VERSION"
 
 green=$'\e[32m'; yellow=$'\e[33m'; red=$'\e[31m'; cyan=$'\e[36m'; reset=$'\e[0m'
 log(){ printf '\n%s==>%s %s\n' "$cyan" "$reset" "$*"; }
 ok(){ printf '%s[OK]%s %s\n' "$green" "$reset" "$*"; }
 warn(){ printf '%s[WARN]%s %s\n' "$yellow" "$reset" "$*"; }
 die(){ printf '%s[FAIL]%s %s\n' "$red" "$reset" "$*" >&2; exit 1; }
+version_lt(){ [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" == "$1" ]]; }
 
 [[ $EUID -eq 0 ]] || die "Run as root on the Proxmox host."
 command -v qm >/dev/null || die "qm not found. Run this on Proxmox VE."
 
 find "${SCRIPT_DIR}" -type f -name '*.sh' ! -path "${SCRIPT_DIR}/install-proxmox-wireguard.sh" -exec chmod 0750 {} +
 ok "Executable permissions ensured for all child scripts."
+"${SCRIPT_DIR}/proxmox/06-ensure-dashboard-binary.sh"
 
 # Discover deployment artifacts even when the project directory was freshly copied.
 # VM identity is primarily the immutable Proxmox tag; fixed name is legacy fallback.
@@ -61,9 +64,10 @@ VM_NAME="${MANAGED_VM_NAME:-${VM_NAME:-wireguard-gateway}}"
 detect_state() {
   declare -g STATE DETAIL VM_EXISTS VM_NAME_MATCH VM_RUNNING SSH_OK CLOUD_INIT_DONE PACKAGE_PRESENT
   declare -g WIREGUARD_INSTALLED WIREGUARD_ACTIVE NFTABLES_ACTIVE HEALTHCHECK_OK SNAPSHOT_PRESENT METADATA_PRESENT HEALTH_REPORT_PRESENT
+  declare -g INSTALLED_VERSION
   while IFS='=' read -r key value; do
     case "$key" in
-      STATE|DETAIL|VM_EXISTS|VM_NAME_MATCH|VM_RUNNING|SSH_OK|CLOUD_INIT_DONE|PACKAGE_PRESENT|WIREGUARD_INSTALLED|WIREGUARD_ACTIVE|NFTABLES_ACTIVE|HEALTHCHECK_OK|SNAPSHOT_PRESENT|METADATA_PRESENT|HEALTH_REPORT_PRESENT)
+      STATE|DETAIL|VM_EXISTS|VM_NAME_MATCH|VM_RUNNING|SSH_OK|CLOUD_INIT_DONE|PACKAGE_PRESENT|WIREGUARD_INSTALLED|WIREGUARD_ACTIVE|NFTABLES_ACTIVE|HEALTHCHECK_OK|SNAPSHOT_PRESENT|METADATA_PRESENT|HEALTH_REPORT_PRESENT|INSTALLED_VERSION)
         printf -v "$key" '%s' "$value"
         ;;
     esac
@@ -89,6 +93,8 @@ print_state() {
   printf 'healthcheck clean:     %s\n' "$HEALTHCHECK_OK"
   printf 'deployment metadata:   %s\n' "$METADATA_PRESENT"
   printf 'initial snapshot:      %s\n' "$SNAPSHOT_PRESENT"
+  printf 'installed version:     %s\n' "${INSTALLED_VERSION:-unknown}"
+  printf 'available version:     %s\n' "$PROJECT_VERSION"
   echo "=================================================================="
 }
 
@@ -141,6 +147,12 @@ offer_resume_or_wipe() {
 
 detect_state
 print_state
+UPDATE_AVAILABLE=0
+if [[ "${INSTALLED_VERSION:-unknown}" == "unknown" ]] || version_lt "${INSTALLED_VERSION}" "$PROJECT_VERSION"; then
+  UPDATE_AVAILABLE=1
+elif [[ "$INSTALLED_VERSION" != "$PROJECT_VERSION" ]]; then
+  warn "Installed version ${INSTALLED_VERSION} is newer than this package (${PROJECT_VERSION}); downgrade is disabled."
+fi
 
 case "$STATE" in
   foreign-vm)
@@ -150,18 +162,52 @@ case "$STATE" in
   complete)
     echo
     echo "Deployment is already complete."
-    echo "  1) Run healthcheck again"
-    echo "  2) Wipe and rebuild from scratch"
-    echo "  3) Exit"
+    if (( UPDATE_AVAILABLE == 1 )); then
+      echo "  1) Update ${INSTALLED_VERSION:-unknown} -> ${PROJECT_VERSION}"
+      echo "  2) Run healthcheck again"
+      echo "  3) Change dashboard administrator password"
+      echo "  4) Wipe and rebuild from scratch"
+      echo "  5) Exit"
+    else
+      echo "  1) Run healthcheck again"
+      echo "  2) Change dashboard administrator password"
+      echo "  3) Wipe and rebuild from scratch"
+      echo "  4) Exit"
+    fi
     read -r -p "Choice [1]: " action
     action="${action:-1}"
     case "$action" in
       1)
+        if (( UPDATE_AVAILABLE == 1 )); then
+          "${SCRIPT_DIR}/proxmox/06-update-deployment.sh"
+          detect_state
+          print_state
+          [[ "$INSTALLED_VERSION" == "$PROJECT_VERSION" ]] || die "Update finished without recording the expected version."
+          exit 0
+        fi
         ssh -i "$SSH_PRIVATE_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
           "${GUEST_USER}@${VM_IP}" 'sudo /opt/proxmox-wireguard/guest/60-healthcheck.sh'
         exit $?
         ;;
-      2) wipe_and_restart ;;
+      2)
+        if (( UPDATE_AVAILABLE == 1 )); then
+          ssh -i "$SSH_PRIVATE_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            "${GUEST_USER}@${VM_IP}" 'sudo /opt/proxmox-wireguard/guest/60-healthcheck.sh'
+          exit $?
+        fi
+        "${SCRIPT_DIR}/proxmox/06-configure-dashboard-password.sh" --force /opt/proxmox-wireguard
+        ssh -i "$SSH_PRIVATE_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${GUEST_USER}@${VM_IP}" 'sudo systemctl restart proxmox-wireguard-dashboard'
+        exit 0
+        ;;
+      3)
+        if (( UPDATE_AVAILABLE == 1 )); then
+          "${SCRIPT_DIR}/proxmox/06-configure-dashboard-password.sh" --force /opt/proxmox-wireguard
+          ssh -i "$SSH_PRIVATE_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${GUEST_USER}@${VM_IP}" 'sudo systemctl restart proxmox-wireguard-dashboard'
+          exit 0
+        fi
+        wipe_and_restart
+        ;;
+      4) if (( UPDATE_AVAILABLE == 1 )); then wipe_and_restart; fi; exit 0 ;;
       *) exit 0 ;;
     esac
     ;;
