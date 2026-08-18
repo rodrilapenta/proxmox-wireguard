@@ -101,6 +101,7 @@ tar -C "$ROOT_DIR" -czf - . | \
     'export LANG=C.UTF-8 LC_ALL=C.UTF-8; sudo rm -rf /opt/proxmox-wireguard && sudo mkdir -p /opt/proxmox-wireguard && sudo tar -xzf - -C /opt/proxmox-wireguard'
 
 log "Running guest installer..."
+"${ROOT_DIR}/proxmox/06-configure-dashboard-password.sh" /opt/proxmox-wireguard
 ssh -tt "${SSH_OPTS[@]}" "${GUEST_USER}@${VM_IP}" \
   'export LANG=C.UTF-8 LC_ALL=C.UTF-8; sudo /opt/proxmox-wireguard/guest/install-all.sh'
 

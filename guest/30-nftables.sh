@@ -30,6 +30,11 @@ table inet filter {
     ip saddr ${LAN_CIDR} tcp dport 22 accept
     ip saddr ${WG_CIDR} tcp dport 22 accept
 
+    # Dashboard administration: LAN or VPN only. Never expose this port in
+    # the router; public access remains WireGuard UDP only.
+    ip saddr ${LAN_CIDR} tcp dport ${DASHBOARD_PORT:-8443} accept
+    ip saddr ${WG_CIDR} tcp dport ${DASHBOARD_PORT:-8443} accept
+
     # WireGuard handshake.
     udp dport ${WG_PORT} accept
   }

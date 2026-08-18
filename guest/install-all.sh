@@ -28,7 +28,13 @@ for step in "${steps[@]}"; do
 done
 
 echo
+"${ROOT_DIR}/guest/apply-migrations.sh"
+
+echo
 "${ROOT_DIR}/guest/60-healthcheck.sh"
+
+echo
+"${ROOT_DIR}/guest/record-version.sh"
 
 echo
 echo "Installation complete."
