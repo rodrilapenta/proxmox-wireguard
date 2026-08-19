@@ -28,7 +28,8 @@ jobs:
         run: |
           cp dashboard/dist/linux-amd64/proxmox-wireguard-dashboard proxmox-wireguard-dashboard-linux-amd64
           sha256sum proxmox-wireguard-dashboard-linux-amd64 > proxmox-wireguard-dashboard-linux-amd64.sha256
-          tar --exclude=.git --exclude=dashboard/bin -czf "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" .
+          tar --exclude=.git --exclude=dashboard/bin -czf "$RUNNER_TEMP/proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" .
+          mv "$RUNNER_TEMP/proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" .
           sha256sum "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz" > "proxmox-wireguard-${GITHUB_REF_NAME}.tar.gz.sha256"
       - name: Publish release assets
         env:
